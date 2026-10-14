@@ -12,6 +12,8 @@ final class ACStore: ObservableObject {
     @Published var firmware = ""
     @Published var problem: String? = "Connecting to MirAIe…"
     @Published var live = false
+    /// True when there are no saved credentials, or MirAIe rejected them.
+    @Published var needsSignIn = false
     @Published var energyPeriod = EnergyPeriod.daily
     @Published var energy: [EnergyBar] = []
     /// Shown when the AC hasn't confirmed a change; `retryUnconfirmed` resends it.
@@ -75,10 +77,42 @@ final class ACStore: ObservableObject {
                 topics: [chosen.topic + "/status", chosen.topic + "/connectionStatus"]
             )
             await loadEnergy()
+            needsSignIn = false
+        } catch MirAIeError.notSignedIn {
+            needsSignIn = true
+            problem = MirAIeError.notSignedIn.localizedDescription
+        } catch MirAIeError.badLogin {
+            needsSignIn = true
+            problem = MirAIeError.badLogin.localizedDescription
         } catch {
             problem = error.localizedDescription
             scheduleReconnect(after: 30)
         }
+    }
+
+    /// Checks the login with MirAIe before saving it.
+    func signIn(login: String, password: String) async {
+        let credentials = Credentials(phone: Credentials.normalize(login), password: password)
+        do {
+            try await api.login(credentials)
+            try credentials.save()
+            problem = "Connecting to MirAIe…"
+            needsSignIn = false
+            await start()
+        } catch {
+            problem = error.localizedDescription
+        }
+    }
+
+    func signOut() {
+        mqtt.disconnect()
+        Credentials.signOut()
+        device = nil
+        devices = []
+        state = ACState()
+        live = false
+        needsSignIn = true
+        problem = MirAIeError.notSignedIn.localizedDescription
     }
 
     private func scheduleReconnect(after seconds: UInt64) {

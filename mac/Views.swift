@@ -1,6 +1,30 @@
 import AppKit
 import Charts
+import ServiceManagement
 import SwiftUI
+
+/// The app's entry in System Settings > General > Login Items.
+enum LoginItem {
+    static var enabled: Bool {
+        get { SMAppService.mainApp.status == .enabled }
+        set {
+            do {
+                if newValue { try SMAppService.mainApp.register() } else { try SMAppService.mainApp.unregister() }
+            } catch {
+                NSLog("Login item change failed: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    /// The first time the app runs, it adds itself to Login Items (a menu-bar
+    /// app is only useful if it's there after a restart). The ⋯ menu turns it off.
+    static func offerOnFirstLaunch() {
+        let key = "addedToLoginItems"
+        guard !UserDefaults.standard.bool(forKey: key) else { return }
+        UserDefaults.standard.set(true, forKey: key)
+        if !enabled { enabled = true }
+    }
+}
 
 /// View-local state. `@State` is a macro in this SDK and its plugin ships
 /// only with full Xcode, so views keep small state in one of these instead.
@@ -780,6 +804,9 @@ struct Footer: View {
                 if !store.firmware.isEmpty { Text("Firmware v\(store.firmware)") }
                 Text("Wi-Fi signal \(s.rssi) dBm")
                 Divider()
+                Toggle("Open at Login", isOn: Binding(get: { LoginItem.enabled }, set: { LoginItem.enabled = $0 }))
+                Button("Sign Out") { store.signOut() }
+                Divider()
                 Button("Quit MirAIe AC") { NSApp.terminate(nil) }.keyboardShortcut("q")
             } label: {
                 Image(systemName: "ellipsis.circle")
@@ -797,14 +824,75 @@ struct SignedOut: View {
     @EnvironmentObject var store: ACStore
 
     var body: some View {
-        VStack(spacing: 10) {
-            Image(systemName: "snowflake").font(.system(size: 26)).foregroundStyle(.secondary)
-            Text(store.problem ?? "Connecting…").font(.system(size: 12)).multilineTextAlignment(.center)
-            HStack {
-                Button("Retry") { Task { await store.start() } }
-                Button("Quit") { NSApp.terminate(nil) }
+        if store.needsSignIn {
+            SignInForm()
+        } else {
+            VStack(spacing: 10) {
+                Image(systemName: "snowflake").font(.system(size: 26)).foregroundStyle(.secondary)
+                Text(store.problem ?? "Connecting…").font(.system(size: 12)).multilineTextAlignment(.center)
+                HStack {
+                    Button("Retry") { Task { await store.start() } }
+                    Button("Quit") { NSApp.terminate(nil) }
+                }
             }
+            .padding(.vertical, 10)
         }
-        .padding(.vertical, 10)
+    }
+}
+
+struct SignInForm: View {
+    @EnvironmentObject var store: ACStore
+    @StateObject private var login = Box("")
+    @StateObject private var password = Box("")
+    @StateObject private var busy = Box(false)
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 10) {
+                Image(systemName: "snowflake")
+                    .font(.system(size: 16, weight: .semibold)).foregroundStyle(.white)
+                    .frame(width: 34, height: 34)
+                    .background(Circle().fill(Color.accentColor))
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Sign in to MirAIe").font(.system(size: 13, weight: .semibold))
+                    Text("Use the phone number and password from the MirAIe app.")
+                        .font(.system(size: 11)).foregroundStyle(.secondary)
+                }
+            }
+            VStack(spacing: 8) {
+                TextField("Phone number or email", text: $login.value)
+                    .textFieldStyle(.roundedBorder)
+                    .textContentType(.username)
+                SecureField("Password", text: $password.value)
+                    .textFieldStyle(.roundedBorder)
+                    .textContentType(.password)
+                    .onSubmit(submit)
+            }
+            if let problem = store.problem, store.needsSignIn, problem != MirAIeError.notSignedIn.localizedDescription {
+                Label(problem, systemImage: "exclamationmark.circle.fill")
+                    .font(.system(size: 11)).foregroundStyle(.red)
+            }
+            HStack {
+                Button("Quit") { NSApp.terminate(nil) }
+                Spacer()
+                if busy.value { ProgressView().controlSize(.small) }
+                Button("Sign In", action: submit)
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(busy.value || login.value.isEmpty || password.value.isEmpty)
+            }
+            Text("The password is kept in your Mac's Keychain and sent only to MirAIe.")
+                .font(.system(size: 10.5)).foregroundStyle(.secondary)
+        }
+        .padding(4)
+    }
+
+    private func submit() {
+        guard !login.value.isEmpty, !password.value.isEmpty, !busy.value else { return }
+        busy.value = true
+        Task {
+            await store.signIn(login: login.value, password: password.value)
+            busy.value = false
+            if !store.needsSignIn { password.value = "" }
+        }
     }
 }

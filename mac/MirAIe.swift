@@ -10,8 +10,8 @@ enum MirAIeError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .notSignedIn: "Not signed in. Run `ac login` in Terminal."
-        case .badLogin: "MirAIe refused the saved password. Run `ac login` in Terminal."
+        case .notSignedIn: "Sign in with the phone number and password you use in the MirAIe app."
+        case .badLogin: "MirAIe didn't accept that phone number and password."
         case .server(let code): "MirAIe's server answered \(code). Retrying…"
         case .noDevices: "No ACs on this MirAIe account."
         }
@@ -32,6 +32,17 @@ struct Config {
     static func set(_ key: String, _ value: Any) {
         var config = read()
         config[key] = value
+        write(config)
+    }
+
+    static func remove(_ key: String) {
+        var config = read()
+        config[key] = nil
+        write(config)
+    }
+
+    private static func write(_ config: [String: Any]) {
+        try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         if let data = try? JSONSerialization.data(withJSONObject: config, options: [.prettyPrinted, .sortedKeys]) {
             try? data.write(to: url)
         }
@@ -57,6 +68,50 @@ struct Credentials {
               let password = String(data: data, encoding: .utf8)
         else { throw MirAIeError.notSignedIn }
         return Credentials(phone: phone, password: password)
+    }
+
+    /// Saves to the same Keychain item and config file the `ac` command uses.
+    func save() throws {
+        Self.deletePassword(for: phone)
+        let item: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: "miraie-ac",
+            kSecAttrAccount as String: phone,
+            kSecAttrLabel as String: "MirAIe AC",
+            kSecValueData as String: Data(password.utf8),
+        ]
+        let status = SecItemAdd(item as CFDictionary, nil)
+        guard status == errSecSuccess else {
+            throw NSError(domain: NSOSStatusErrorDomain, code: Int(status),
+                          userInfo: [NSLocalizedDescriptionKey: "Couldn't save the password to the Keychain (\(status))."])
+        }
+        Config.set("phone", phone)
+    }
+
+    static func signOut() {
+        if let phone = Config.read()["phone"] as? String { deletePassword(for: phone) }
+        Config.remove("phone")
+    }
+
+    private static func deletePassword(for phone: String) {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: "miraie-ac",
+            kSecAttrAccount as String: phone,
+        ]
+        SecItemDelete(query as CFDictionary)
+    }
+
+    /// "98765 43210" -> "+919876543210"; emails and numbers with a country code pass through.
+    static func normalize(_ login: String) -> String {
+        let trimmed = login.trimmingCharacters(in: .whitespaces)
+        if trimmed.contains("@") { return trimmed }
+        var digits = trimmed.filter { $0.isNumber || $0 == "+" }
+        if !digits.hasPrefix("+") {
+            digits = digits.drop { $0 == "0" }.description
+            digits = "+91" + digits
+        }
+        return digits
     }
 }
 

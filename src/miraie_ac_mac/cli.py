@@ -125,8 +125,11 @@ def autostart(enable: bool) -> None:
         print("The menu-bar app no longer starts at login (and is stopped now).")
         return
     # Prefer the SwiftUI panel (mac/build.sh); fall back to the simple Python menu.
-    panel = Path.home() / "Applications" / "MirAIe AC.app" / "Contents" / "MacOS" / "MirAIeAC"
-    program = str(panel) if panel.exists() else shutil.which("ac-menubar")
+    # The DMG's app turns on Open at Login by itself (its ⋯ menu); this is for
+    # development builds in ~/Applications, or the simple Python menu.
+    panels = [Path(root) / "MirAIe AC.app" / "Contents" / "MacOS" / "MirAIeAC"
+              for root in ("/Applications", Path.home() / "Applications")]
+    program = next((str(p) for p in panels if p.exists()), None) or shutil.which("ac-menubar")
     if not program:
         raise SystemExit("Can't find the menu-bar app. Build it with mac/build.sh.")
     AGENT_PATH.parent.mkdir(parents=True, exist_ok=True)

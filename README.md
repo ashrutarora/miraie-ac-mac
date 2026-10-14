@@ -19,19 +19,28 @@ Click the snowflake in the menu bar (it shows the set temperature while the AC i
 
 ## Install
 
-Needs macOS 14+, [uv](https://docs.astral.sh/uv/), and the Xcode command-line tools (full Xcode is not needed).
+**The app:** download `MirAIe-AC-<version>.dmg` from
+[Releases](https://github.com/ashrutarora/miraie-ac-mac/releases), open it and drag **MirAIe AC** to Applications.
+It runs on macOS 14 or later, on Apple silicon and Intel.
+
+1. Open it from Applications. The app isn't signed with a paid Apple certificate, so macOS says it can't check the
+   developer: click **Done**, open **System Settings › Privacy & Security** (the disk image has a shortcut), and
+   click **Open Anyway**. You only do this once.
+2. Click the snowflake in the menu bar and sign in with your MirAIe phone number (or email) and password. The
+   password is kept in the Keychain and sent only to MirAIe.
+3. It adds itself to Login Items; the ⋯ menu turns that off, and has Sign Out and Quit.
+
+**The `ac` command** (optional) needs [uv](https://docs.astral.sh/uv/):
 
 ```bash
 uv tool install --editable .     # puts `ac` in ~/.local/bin
-ac login                         # MirAIe phone number + password; the password goes to the Keychain
-mac/build.sh                     # builds ~/Applications/MirAIe AC.app
-ac autostart on                  # starts the panel now and at every login
+ac login                         # or skip this if you've signed in in the app: both share the Keychain item
 ```
 
-The first time the panel starts, macOS asks whether it may read the `miraie-ac` Keychain item: choose
-**Always Allow**. The app is signed ad hoc, so a rebuild asks once more.
-
 `~/.local/bin/ac` shadows macOS's own `/usr/sbin/ac` (an old login-time report); run that one by its full path.
+
+**Building it yourself** needs the Xcode command-line tools (full Xcode is not needed): `mac/build.sh` builds the
+app into `~/Applications`, and `mac/build.sh --dmg` builds the disk image in `mac/build/`.
 
 ## The `ac` command
 
@@ -48,7 +57,7 @@ ac display on|off       the light on the indoor unit
 ac sleep                on, cool, low fan, Converti8 50%, swing auto
 ac on 24 cool fan high  several at once, in order
 ac list / ac use "Bedroom" / ac --ac Bedroom off
-ac logout / ac autostart on|off
+ac logout
 ```
 
 Each command signs in, sends, and waits for the AC to report its new state, so it takes 2-4 seconds.
@@ -84,5 +93,5 @@ The status reports each timer as the Unix time it fires. The room temperature (`
 ## Where things live
 
 - Password: Keychain, service `miraie-ac`. Phone number and default AC: `~/.config/miraie-ac/config.json`.
-- Login item: `~/Library/LaunchAgents/com.ashrutarora.miraie-ac.plist` (`ac autostart off` removes it).
+- Login item: System Settings › General › Login Items (the app's ⋯ menu turns it on or off).
 - Panel source: `mac/` (SwiftUI, no dependencies). CLI: `src/miraie_ac_mac/`. Tests: `uv run pytest`.
