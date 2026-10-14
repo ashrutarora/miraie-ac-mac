@@ -8,6 +8,7 @@ enum Main {
         if let flag = args.firstIndex(of: "--snapshot"), flag + 1 < args.count {
             Snapshot.run(to: URL(fileURLWithPath: args[flag + 1]))
         } else {
+            Install.tidyUp()
             LoginItem.offerOnFirstLaunch()
             MirAIeACApp.main()
         }

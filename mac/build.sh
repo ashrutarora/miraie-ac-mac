@@ -4,10 +4,10 @@
 #   mac/build.sh --dmg    build build/MirAIe-AC-<version>.dmg for people to download
 set -euo pipefail
 cd "$(dirname "$0")"
-VERSION=0.2.0
+VERSION=0.2.1
 MIN_MACOS=14.0
 APP="build/MirAIe AC.app"
-SOURCES=(App.swift ACStore.swift MirAIe.swift MQTT.swift Views.swift)
+SOURCES=(App.swift ACStore.swift Install.swift MirAIe.swift MQTT.swift Views.swift)
 
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" build/pkg
@@ -47,8 +47,11 @@ if [[ "${1:-}" == "--dmg" ]]; then
     tiffutil -cathidpicheck build/pkg/background.png build/pkg/background@2x.png -out build/pkg/background.tiff 2>/dev/null
     DMG="build/MirAIe-AC-$VERSION.dmg"
     rm -f "$DMG"
+    # The Settings shortcut wears System Settings' icon (dmgbuild copies with ditto, which keeps it).
+    cp packaging/Open-Privacy-Security.inetloc build/pkg/
+    swift packaging/set-icon.swift "/System/Applications/System Settings.app" build/pkg/Open-Privacy-Security.inetloc
     $VENV/bin/dmgbuild -s packaging/dmg-settings.py -D app="$APP" \
-        -D link=packaging/Open-Privacy-Security.inetloc -D background=build/pkg/background.tiff \
+        -D link=build/pkg/Open-Privacy-Security.inetloc -D background=build/pkg/background.tiff \
         "MirAIe AC" "$DMG"
     echo "Built $DMG"
 else
