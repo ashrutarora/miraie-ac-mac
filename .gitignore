@@ -1,0 +1,7 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+mac/build/
+tools/logs/
+.DS_Store

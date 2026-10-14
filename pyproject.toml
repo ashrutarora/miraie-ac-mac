@@ -1,0 +1,27 @@
+[project]
+name = "miraie-ac-mac"
+version = "0.1.0"
+description = "Control a Panasonic MirAIe AC from the Mac terminal and menu bar"
+readme = "README.md"
+authors = [
+    { name = "Ashrut Arora", email = "ashrutarora@gmail.com" }
+]
+requires-python = ">=3.13"
+dependencies = [
+    "keyring>=25.7.0",
+    "miraie-ac-in>=1.1.8",
+    "rumps>=0.4.0",
+]
+
+[project.scripts]
+ac = "miraie_ac_mac.cli:main"
+ac-menubar = "miraie_ac_mac.menubar:main"
+
+[build-system]
+requires = ["uv_build>=0.12.7,<0.13.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+]
